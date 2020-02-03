@@ -8,7 +8,6 @@ import pickle
 import argparse
 import torch
 import json
-
 import sys
 
 sys.path.append("/mlodata1/sabet/esim")
@@ -16,6 +15,9 @@ sys.path.append("/mlodata1/sabet/esim")
 from torch.utils.data import DataLoader
 from esim.data import NLIDataset
 from esim.model import ESIM
+from torchtext.datasets import XNLI
+
+import torch.nn as nn
 
 from ipdb import set_trace
 
@@ -91,20 +93,12 @@ def main(test_files, pretrained_file, labeldict, output_dir, batch_size=32):
     hidden_size = checkpoint["model"]["_projection.0.weight"].size(0)
     num_classes = checkpoint["model"]["_classification.4.weight"].size(0)
 
-    set_trace()
-
     print("\t* Loading test data...")
-    with open(os.path.normpath(test_files["matched"]), "rb") as pkl:
-        matched_test_data = NLIDataset(pickle.load(pkl))
-    with open(os.path.normpath(test_files["mismatched"]), "rb") as pkl:
-        mismatched_test_data = NLIDataset(pickle.load(pkl))
+    with open(os.path.normpath(test_files["test"]), "rb") as pkl:
+        data = pickle.load(pkl)["fr"]
+        test_data = NLIDataset(data)
 
-    matched_test_loader = DataLoader(
-        matched_test_data, shuffle=False, batch_size=batch_size
-    )
-    mismatched_test_loader = DataLoader(
-        mismatched_test_data, shuffle=False, batch_size=batch_size
-    )
+    test_loader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
 
     print("\t* Building model...")
     model = ESIM(
@@ -113,24 +107,26 @@ def main(test_files, pretrained_file, labeldict, output_dir, batch_size=32):
 
     model.load_state_dict(checkpoint["model"])
 
+    with open(os.path.normpath(test_files["embeddings"]), "rb") as pkl:
+        embeddings = pickle.load(pkl)
+        tgt_embeddings = nn.Embedding(embeddings.shape[0], embeddings.shape[1])
+        tgt_embeddings.weight = nn.Parameter(torch.tensor(embeddings))
+
+    # replace model embeddings with xling embeddings from target language
+    model._word_embedding = tgt_embeddings.to(device)
+
     print(
         20 * "=",
         " Prediction on MNLI with ESIM model on device: {} ".format(device),
         20 * "=",
     )
 
-    print("\t* Prediction for matched test set...")
-    predictions = predict(model, matched_test_loader, labeldict)
+    set_trace()
 
-    with open(os.path.join(output_dir, "matched_predictions.csv"), "w") as output_f:
-        output_f.write("pairID,gold_label\n")
-        for pair_id in predictions:
-            output_f.write(pair_id + "," + predictions[pair_id] + "\n")
+    print("\t* Prediction for test set...")
+    predictions = predict(model, test_loader, labeldict)
 
-    print("\t* Prediction for mismatched test set...")
-    predictions = predict(model, mismatched_test_loader, labeldict)
-
-    with open(os.path.join(output_dir, "mismatched_predictions.csv"), "w") as output_f:
+    with open(os.path.join(output_dir, "predictions.csv"), "w") as output_f:
         output_f.write("pairID,gold_label\n")
         for pair_id in predictions:
             output_f.write(pair_id + "," + predictions[pair_id] + "\n")
@@ -138,15 +134,14 @@ def main(test_files, pretrained_file, labeldict, output_dir, batch_size=32):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Test the ESIM model on\
- the MNLI matched and mismatched test sets"
+        description="Test the ESIM model on the XNLI test sets"
     )
     parser.add_argument(
         "checkpoint", help="Path to a checkpoint with a pretrained model"
     )
     parser.add_argument(
         "--config",
-        default="../config/testing/mnli_testing.json",
+        default="../config/testing/xnli_testing.json",
         help="Path to a configuration file",
     )
     args = parser.parse_args()

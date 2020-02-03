@@ -1,7 +1,7 @@
 {
-    "data_dir": "../../data/dataset/multinli_1.0",
-    "embeddings_file": "../../data/embeddings/bs2v.en-fr.en.vec",
-    "target_dir": "../../data/preprocessed/MNLI",
+    "data_dir": "../../data/dataset/xnli_1.0",
+    "embeddings_file": "../../data/embeddings/bs2v.en-fr.fr.vec",
+    "target_dir": "../../data/preprocessed/XNLI",
     "lowercase": false,
     "ignore_punctuation": false,
     "num_words": null,

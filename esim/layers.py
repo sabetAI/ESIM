@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from .utils import sort_by_seq_lens, masked_softmax, weighted_sum
 
+from ipdb import set_trace
 
 # Class widely inspired from:
 # https://github.com/allenai/allennlp/blob/master/allennlp/modules/input_variational_dropout.py
@@ -30,10 +31,10 @@ class RNNDropout(nn.Dropout):
         Returns:
             A new tensor on which dropout has been applied.
         """
-        ones = sequences_batch.data.new_ones(sequences_batch.shape[0],
-                                             sequences_batch.shape[-1])
-        dropout_mask = nn.functional.dropout(ones, self.p, self.training,
-                                             inplace=False)
+        ones = sequences_batch.data.new_ones(
+            sequences_batch.shape[0], sequences_batch.shape[-1]
+        )
+        dropout_mask = nn.functional.dropout(ones, self.p, self.training, inplace=False)
         return dropout_mask.unsqueeze(1) * sequences_batch
 
 
@@ -49,14 +50,16 @@ class Seq2SeqEncoder(nn.Module):
     permuted back to the original order of the input sequences.
     """
 
-    def __init__(self,
-                 rnn_type,
-                 input_size,
-                 hidden_size,
-                 num_layers=1,
-                 bias=True,
-                 dropout=0.0,
-                 bidirectional=False):
+    def __init__(
+        self,
+        rnn_type,
+        input_size,
+        hidden_size,
+        num_layers=1,
+        bias=True,
+        dropout=0.0,
+        bidirectional=False,
+    ):
         """
         Args:
             rnn_type: The type of RNN to use as encoder in the module.
@@ -76,8 +79,9 @@ class Seq2SeqEncoder(nn.Module):
             bidirectional: If True, the encoder of the module is bidirectional.
                 Defaults to False.
         """
-        assert issubclass(rnn_type, nn.RNNBase),\
-            "rnn_type must be a class inheriting from torch.nn.RNNBase"
+        assert issubclass(
+            rnn_type, nn.RNNBase
+        ), "rnn_type must be a class inheriting from torch.nn.RNNBase"
 
         super(Seq2SeqEncoder, self).__init__()
 
@@ -89,13 +93,15 @@ class Seq2SeqEncoder(nn.Module):
         self.dropout = dropout
         self.bidirectional = bidirectional
 
-        self._encoder = rnn_type(input_size,
-                                 hidden_size,
-                                 num_layers=num_layers,
-                                 bias=bias,
-                                 batch_first=True,
-                                 dropout=dropout,
-                                 bidirectional=bidirectional)
+        self._encoder = rnn_type(
+            input_size,
+            hidden_size,
+            num_layers=num_layers,
+            bias=bias,
+            batch_first=True,
+            dropout=dropout,
+            bidirectional=bidirectional,
+        )
 
     def forward(self, sequences_batch, sequences_lengths):
         """
@@ -110,16 +116,16 @@ class Seq2SeqEncoder(nn.Module):
             reordered_outputs: The outputs (hidden states) of the encoder for
                 the sequences in the input batch, in the same order.
         """
-        sorted_batch, sorted_lengths, _, restoration_idx =\
-            sort_by_seq_lens(sequences_batch, sequences_lengths)
-        packed_batch = nn.utils.rnn.pack_padded_sequence(sorted_batch,
-                                                         sorted_lengths,
-                                                         batch_first=True)
+        sorted_batch, sorted_lengths, _, restoration_idx = sort_by_seq_lens(
+            sequences_batch, sequences_lengths
+        )
+        packed_batch = nn.utils.rnn.pack_padded_sequence(
+            sorted_batch, sorted_lengths, batch_first=True
+        )
 
         outputs, _ = self._encoder(packed_batch, None)
 
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs,
-                                                      batch_first=True)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs, batch_first=True)
         reordered_outputs = outputs.index_select(0, restoration_idx)
 
         return reordered_outputs
@@ -136,11 +142,7 @@ class SoftmaxAttention(nn.Module):
     conversely for the elements of the premises.
     """
 
-    def forward(self,
-                premise_batch,
-                premise_mask,
-                hypothesis_batch,
-                hypothesis_mask):
+    def forward(self, premise_batch, premise_mask, hypothesis_batch, hypothesis_mask):
         """
         Args:
             premise_batch: A batch of sequences of vectors representing the
@@ -164,22 +166,21 @@ class SoftmaxAttention(nn.Module):
         """
         # Dot product between premises and hypotheses in each sequence of
         # the batch.
-        similarity_matrix = premise_batch.bmm(hypothesis_batch.transpose(2, 1)
-                                                              .contiguous())
+        similarity_matrix = premise_batch.bmm(
+            hypothesis_batch.transpose(2, 1).contiguous()
+        )
 
         # Softmax attention weights.
         prem_hyp_attn = masked_softmax(similarity_matrix, hypothesis_mask)
-        hyp_prem_attn = masked_softmax(similarity_matrix.transpose(1, 2)
-                                                        .contiguous(),
-                                       premise_mask)
+        hyp_prem_attn = masked_softmax(
+            similarity_matrix.transpose(1, 2).contiguous(), premise_mask
+        )
 
         # Weighted sums of the hypotheses for the the premises attention,
         # and vice-versa for the attention of the hypotheses.
-        attended_premises = weighted_sum(hypothesis_batch,
-                                         prem_hyp_attn,
-                                         premise_mask)
-        attended_hypotheses = weighted_sum(premise_batch,
-                                           hyp_prem_attn,
-                                           hypothesis_mask)
+        attended_premises = weighted_sum(hypothesis_batch, prem_hyp_attn, premise_mask)
+        attended_hypotheses = weighted_sum(
+            premise_batch, hyp_prem_attn, hypothesis_mask
+        )
 
         return attended_premises, attended_hypotheses

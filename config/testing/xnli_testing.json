@@ -1,0 +1,13 @@
+{
+    "test_files": {
+        "test": "../data/preprocessed/XNLI/test_data.pkl",
+        "embeddings": "../data/preprocessed/XNLI/embeddings.pkl"
+    },
+    "labeldict": {
+        "entailment": 0,
+        "neutral": 1,
+        "contradiction": 2
+    },
+    "output_dir": "../data/results",
+    "batch_size": 32
+}
